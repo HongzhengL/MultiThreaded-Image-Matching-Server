@@ -22,6 +22,20 @@ int queue_len = 0; //Global integer to indicate the length of the queue
   How will you store the database of images? What data structure will you use? Example: database_entry_t database[100]; 
 */
 
+pthread_t *workers;
+pthread_t *dispatchers;
+
+
+int num_imgs = 0;
+
+request_t req_entries[MAX_QUEUE_LEN];
+int num_req = 0;
+int req_idx = 0;
+
+database_entry_t database[100];
+
+
+
 
 //TODO: Implement this function
 /**********************************************
@@ -101,7 +115,66 @@ void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, char * file
 
 void loadDatabase(char *path)
 {
- 
+  DIR *dir;
+  struct dirent *entry; //Tracking file entry in directory
+  struct stat statbuf; //Used to check file type
+
+  dir = opendir(path);
+  if (dir == NULL) {
+    perror("Failed to open directory");
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Directory %s opened\n", path);
+
+
+  while ((entry = readdir(dir)) != NULL) {
+    char filepath[BUFF_SIZE];
+    snprintf(filepath, BUFF_SIZE, "%s/%s", path, entry->d_name);
+
+    stat(filepath, &statbuf);
+
+    if (S_ISREG(statbuf.st_mode)) {
+        printf("Opening file %s\n", filepath);
+        FILE *fptr = fopen(filepath, "rb");
+        if (fptr == NULL) {
+        perror("Error opening image");
+        exit(EXIT_FAILURE);
+        }
+
+        char *buffer = malloc(BUFFER_SIZE);
+        if (buffer == NULL) {
+        perror("Error allocating buffer");
+        fclose(fptr);
+        exit(EXIT_FAILURE);
+        }
+
+        size_t bytes_read = fread(buffer, 1, BUFFER_SIZE, fptr);
+        if (bytes_read == 0) {
+        perror("Failed to read file");
+        fclose(fptr);
+        free(buffer);
+        exit(EXIT_FAILURE);
+        }
+
+    
+        database[num_imgs].file_name = malloc(strlen(filepath) + 1); //+1 for null terminator
+        strcpy(database[num_imgs].file_name, filepath);
+
+        database[num_imgs].file_size = bytes_read;
+
+        database[num_imgs].buffer = malloc(strlen(buffer));
+        strcpy(database[num_imgs].buffer, buffer);
+
+        fclose(fptr);
+        free(buffer);
+
+        num_imgs++;
+    }
+
+  }
+
+  closedir(dir);
 }
 
 
@@ -195,12 +268,36 @@ int main(int argc , char *argv[])
   /* TODO: Intermediate Submission
   *    Description:      Get the input args --> (1) port (2) path (3) num_dispatcher (4) num_workers  (5) queue_length
   */
-  
+  port = atoi(argv[1]);
+  strcpy(path, argv[2]);
+  num_dispatcher = atoi(argv[3]);
+  num_worker = atoi(argv[4]);
+  queue_len = atoi(argv[5]);
+
 
   /* TODO: Intermediate Submission
   *    Description:      Open log file
   *    Hint:             Use Global "File* logfile", use "server_log" as the name, what open flags do you want?
   */
+ logfile = fopen("server_log", "a");
+ if (logfile == NULL) {
+  perror("Failed to open log file");
+  exit(EXIT_FAILURE);
+ }
+
+ int logfile_fd = fileno(logfile);
+ if (logfile_fd == -1) {
+  perror("Failed to get log file descriptor");
+  fclose(logfile);
+  exit(EXIT_FAILURE);
+ }
+ 
+ if (fchmod(logfile_fd, S_IRUSR | S_IWUSR) == -1) {
+  perror("Failed to set file permissions");
+  fclose(logfile);
+  exit(EXIT_FAILURE);
+ }
+
   
  
 
@@ -213,6 +310,7 @@ int main(int argc , char *argv[])
   /* TODO : Intermediate Submission
   *    Description:      Load the database
   */
+  loadDatabase(path);
  
 
   /* TODO: Intermediate Submission
