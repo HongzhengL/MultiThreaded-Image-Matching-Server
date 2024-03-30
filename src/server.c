@@ -142,7 +142,7 @@ void loadDatabase(char *path)
         exit(EXIT_FAILURE);
         }
 
-        char *buffer = malloc(BUFFER_SIZE);
+        char *buffer = (char *)malloc(BUFFER_SIZE);
         if (buffer == NULL) {
         perror("Error allocating buffer");
         fclose(fptr);
@@ -158,12 +158,12 @@ void loadDatabase(char *path)
         }
 
     
-        database[num_imgs].file_name = malloc(strlen(filepath) + 1); //+1 for null terminator
+        database[num_imgs].file_name = (char *)malloc(strlen(filepath) + 1); //+1 for null terminator
         strcpy(database[num_imgs].file_name, filepath);
 
         database[num_imgs].file_size = bytes_read;
 
-        database[num_imgs].buffer = malloc(strlen(buffer));
+        database[num_imgs].buffer = (char *)malloc(strlen(buffer));
         strcpy(database[num_imgs].buffer, buffer);
 
         fclose(fptr);
@@ -227,8 +227,10 @@ void * worker(void *arg) {
   /* TODO : Intermediate Submission 
   *    Description:      Get the id as an input argument from arg, set it to ID
   */
+  pthread_t worker_id = pthread_self();
+ 
     
-  while (1) {
+   while (1) {
     /* TODO
     *    Description:      Get the request from the queue and do as follows
       //(1) Request thread safe access to the request queue by getting the req_queue_mutex lock
@@ -279,32 +281,17 @@ int main(int argc , char *argv[])
   *    Description:      Open log file
   *    Hint:             Use Global "File* logfile", use "server_log" as the name, what open flags do you want?
   */
- logfile = fopen("server_log", "a");
+ logfile = fopen("server_log", "a+"); //Appending to the end of server_log
  if (logfile == NULL) {
   perror("Failed to open log file");
   exit(EXIT_FAILURE);
  }
 
- int logfile_fd = fileno(logfile);
- if (logfile_fd == -1) {
-  perror("Failed to get log file descriptor");
-  fclose(logfile);
-  exit(EXIT_FAILURE);
- }
- 
- if (fchmod(logfile_fd, S_IRUSR | S_IWUSR) == -1) {
-  perror("Failed to set file permissions");
-  fclose(logfile);
-  exit(EXIT_FAILURE);
- }
-
-  
- 
-
   /* TODO: Intermediate Submission
   *    Description:      Start the server
   *    Utility Function: void init(int port); //look in utils.h 
   */
+  init(port);
 
 
   /* TODO : Intermediate Submission
@@ -319,21 +306,46 @@ int main(int argc , char *argv[])
   *                      You will want to initialize some kind of global array to pass in thread ID's
   *                      How should you track this p_thread so you can terminate it later? [global]
   */
+ dispatchers = (pthread_t *)malloc(num_dispatcher * sizeof(pthread_t));
+ workers = (pthread_t *)malloc(num_worker * sizeof(pthread_t));
+ int i;
+
+ for (i = 0; i < num_dispatcher; i++) {
+  pthread_t thread;
+  int result;
+  result = pthread_create(&thread, NULL, dispatch, NULL);
+  if (result != 0) {
+    fprintf(stderr, "Error creating dispatcher thread %d: %d\n", i, result);
+    exit(EXIT_FAILURE);
+  }
+  dispatchers[i] = thread;
+ }
+
+ for (i = 0; i < num_worker; i++) {
+  pthread_t thread;
+  int result;
+  result = pthread_create(&thread, NULL, worker, NULL);
+  if (result != 0) {
+    fprintf(stderr, "Error creating worker thread %d: %d\n", i, result);
+    exit(EXIT_FAILURE);
+  }
+  workers[i] = thread;
+ }
+
 
 
 
   // Wait for each of the threads to complete their work
   // Threads (if created) will not exit (see while loop), but this keeps main from exiting
-  int i;
   for(i = 0; i < num_dispatcher; i++){
     fprintf(stderr, "JOINING DISPATCHER %d \n",i);
-    if((pthread_join(dispatcher_thread[i], NULL)) != 0){
+    if((pthread_join(dispatchers[i], NULL)) != 0){
       printf("ERROR : Fail to join dispatcher thread %d.\n", i);
     }
   }
   for(i = 0; i < num_worker; i++){
-   // fprintf(stderr, "JOINING WORKER %d \n",i);
-    if((pthread_join(worker_thread[i], NULL)) != 0){
+   fprintf(stderr, "JOINING WORKER %d \n",i);
+    if((pthread_join(workers[i], NULL)) != 0){
       printf("ERROR : Fail to join worker thread %d.\n", i);
     }
   }
