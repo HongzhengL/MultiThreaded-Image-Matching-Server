@@ -19,8 +19,7 @@ processing_args_t req_entries[100];
 * 6. receive_file_from_server saves the processed image in the output directory, so pass in the right directory path
 * 7. Close the file and the socket
 */
-void * request_handle(void * args)
-{
+void * request_handle(void * args) {
     return NULL;
 }
 
@@ -33,14 +32,12 @@ void * request_handle(void * args)
 * Note: Make sure to avoid any race conditions when creating the threads and passing the file path to the request_handle function. 
 * use the req_entries array to store the file path and pass the index of the array to the thread. 
 */
-void directory_trav(char * args)
-{
-   
+void directory_trav(char * args) {
+
 }
-int main(int argc, char *argv[])
-{
-    if(argc < 2)
-    {
+
+int main(int argc, char *argv[]) {
+    if(argc < 2) {
         fprintf(stderr, "Usage: ./client <directory path> <Server Port> <output path>\n");
         exit(-1);
     }

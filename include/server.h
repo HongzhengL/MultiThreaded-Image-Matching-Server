@@ -31,7 +31,7 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <time.h>
-#include "util.h"
+#include "utils.h"
 #include <stdbool.h>
 #include <unistd.h>
 #include <signal.h>

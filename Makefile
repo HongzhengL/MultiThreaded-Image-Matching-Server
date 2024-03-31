@@ -18,3 +18,7 @@ client: $(LIBDIR)/utils.o $(INCDIR)/utils.h $(SRCDIR)/client.c
 clean:
 	rm -f server client
 	rm -rf output
+
+zip:
+	@make clean
+	zip -r project-3.zip include lib src database expected Makefile README.md
