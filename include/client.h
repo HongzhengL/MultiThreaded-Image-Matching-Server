@@ -31,8 +31,7 @@
 #define MAX 80
 #define SA struct sockaddr
 
-typedef struct processing_args
-{
+typedef struct processing_args {
     int number_worker;
     char *file_name;
 } processing_args_t;
@@ -42,8 +41,7 @@ typedef struct packet {
     unsigned int size;
 } packet_t; 
 
-typedef struct request_detials
-{
+typedef struct request_detials {
     char buffer[1028];
     long filelength;
     char file_name[1028];
@@ -51,5 +49,5 @@ typedef struct request_detials
 
 
 /********************* [ Function Prototypes       ] **********************/
-void * request_handle(void * args);
+void *request_handle(void * args);
 void directory_trav(char * args);

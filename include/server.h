@@ -60,15 +60,13 @@
 
 /********************* [ Helpful Typedefs        ] ************************/
 
-typedef struct request_queue
-{
+typedef struct request_queue {
     int file_size;
     int file_descriptor;
     char *buffer;
-}request_t; 
+} request_t; 
 
-typedef struct request_detials
-{
+typedef struct request_detials {
   char buffer[1028];
   long filelength;
   char file_name[1028];
@@ -78,8 +76,7 @@ typedef struct packet {
   unsigned int size;
 } packet_t; 
 
-typedef struct database_entry
-{
+typedef struct database_entry {
   char *file_name;
   int file_size;
   char *buffer;

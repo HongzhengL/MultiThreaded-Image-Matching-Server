@@ -20,7 +20,31 @@ processing_args_t req_entries[100];
 * 7. Close the file and the socket
 */
 void * request_handle(void * args) {
-    return NULL;
+    char *file_name = (char *) args;
+    FILE *file = fopen(file_name, "rb");
+    if (!file) {
+        fprintf(stderr, "%s at %d: Failed to open file %s\n", __FILE__, __LINE__, file_name);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fprintf(stderr, "%s at %d: Failed to seek to the end of the file %s\n", __FILE__, __LINE__, file_name);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+    size_t file_size = ftell(file);
+    if (file_size == -1) {
+        fprintf(stderr, "%s at %d: Failed to get the file size of %s\n", __FILE__, __LINE__, file_name);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+
+    int socket = setup_connection(port);
+    send_file_to_server(socket, file, file_size);
+
+    
+    close(socket);
+    fclose(file);
 }
 
 /* TODO: Intermediate Submission
@@ -33,7 +57,40 @@ void * request_handle(void * args) {
 * use the req_entries array to store the file path and pass the index of the array to the thread. 
 */
 void directory_trav(char * args) {
+    DIR *dir;
+    struct dirent *entry;
+    struct stat filestat;
 
+    if(!(dir = opendir(args))) {
+        fprintf(stderr, "%s at %d: Failed to open directory %s\n", __FILE__, __LINE__, args);
+        exit(EXIT_FAILURE);
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
+            char path[BUFF_SIZE];
+            snprintf(path, sizeof(path), "%s/%s", args, entry->d_name);
+            if (stat(path, &filestat) < 0) {
+                fprintf(stderr, "%s at %d: Failed to get file stats for %s\n", __FILE__, __LINE__, path);
+                exit(EXIT_FAILURE);
+            }
+            if (S_ISREG(filestat.st_mode)) {    // if regular file
+                printf("File: %s\n", path);
+                // create a new thread to invoke the request_handle function
+                // pass the file path as an argument
+                pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) path);
+                worker_thread_id++;
+            }
+        } else {
+            continue;
+        }
+    }
+
+    for (int i = 0; i < worker_thread_id; i++) {
+        pthread_join(worker_thread[i], NULL);
+    }
+
+    closedir(dir);
 }
 
 int main(int argc, char *argv[]) {
@@ -42,11 +99,22 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
     /*TODO:  Intermediate Submission
-    * 1. Get the input args --> (1) directory path (2) Server Port (3) output path
-    */
-
+     * 1. Get the input args --> (1) directory path (2) Server Port (3) output path
+     */
+    port = atoi(argv[2]);
+    strcpy(output_path, argv[3]);
     /*TODO: Intermediate Submission
-    * Call the directory_trav function to traverse the directory and send the images to the server
-    */
+     * Call the directory_trav function to traverse the directory and send the images to the server
+     */
+    directory_trav(argv[1]);
+    // printf("All images processed successfully\n");
+    int fd = setup_connection(port);
+    if (fd == -1) {
+        fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    
+
+    close(fd);
     return 0;  
 }
