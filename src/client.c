@@ -39,6 +39,7 @@ void * request_handle(void * args) {
         fclose(file);
         exit(EXIT_FAILURE);
     }
+    rewind(file);
 
     int socket = setup_connection(port);
     send_file_to_server(socket, file, file_size);
@@ -77,7 +78,6 @@ void directory_trav(char * args) {
                 exit(EXIT_FAILURE);
             }
             if (S_ISREG(filestat.st_mode)) {    // if regular file
-                printf("79: File: %s\n", path);
                 // create a new thread to invoke the request_handle function
                 // pass the file path as an argument
                 // req_entries[worker_thread_id].file_name = path;
