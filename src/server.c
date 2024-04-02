@@ -50,28 +50,29 @@ simple_queue_t req_queue[MAX_QUEUE_LEN];
        - database_entry_t that is the closest match to the input_image
 ************************************************/
 //just uncomment out when you are ready to implement this function
-database_entry_t image_match(char *input_image, int size) {
-    // const char *closest_file     = NULL;
-    // int         closest_distance = INT_MAX;
-    // int closest_index = 0;
-    // for(int i = 0; i < 0 /* replace with your database size*/; i++) {
-    //     const char *current_file; /* TODO: assign to the buffer from the database struct*/
-    //     int result = memcmp(input_image, current_file, size);
-    //     if (result == 0) {
-    //         return database[i];
-    //     } else if (result < closest_distance) {
-    //         closest_distance = result;
-    //         closest_file     = current_file;
-    //         closest_index = i;
-    //     }
-    // }
 
-    // if (closest_file != NULL) {
-    //   return database[closest_index];
-    // } else {
-    //   return database[closest_index];
-    // }
-}
+// database_entry_t image_match(char *input_image, int size) {
+//     const char *closest_file     = NULL;
+//     int         closest_distance = INT_MAX;
+//     int closest_index = 0;
+//     for(int i = 0; i < 0 /* replace with your database size*/; i++) {
+//         const char *current_file; /* TODO: assign to the buffer from the database struct*/
+//         int result = memcmp(input_image, current_file, size);
+//         if (result == 0) {
+//             return database[i];
+//         } else if (result < closest_distance) {
+//             closest_distance = result;
+//             closest_file     = current_file;
+//             closest_index = i;
+//         }
+//     }
+
+//     if (closest_file != NULL) {
+//       return database[closest_index];
+//     } else {
+//       return database[closest_index];
+//     }
+// }
 
 //TODO: Implement this function
 /**********************************************
@@ -170,6 +171,8 @@ void loadDatabase(char *path) {
 
 
 void *dispatch(void *arg)  {
+    int ID = *((int *) arg);
+    printf("Dispatch ID: %d\n", ID);
     while (1) {
         size_t file_size = 0;
         request_detials_t request_details;
@@ -189,6 +192,10 @@ void *dispatch(void *arg)  {
         char *request = get_request_server(socketfd, &file_size);
         if (request == NULL) {
             continue;
+        } else {
+            request_details.filelength = file_size;
+            strcpy(request_details.buffer, request);
+            printf("Request file size: %ld\n", request_details.filelength);
         }
         /* TODO
             *    Description:      Add the request into the queue
@@ -211,17 +218,18 @@ void *dispatch(void *arg)  {
 
 void *worker(void *arg) {
 
-    int num_request = 0;                                    //Integer for tracking each request for printing into the log file
-    int fileSize    = 0;                                    //Integer to hold the size of the file being requested
-    void *memory    = NULL;                                 //memory pointer where contents being requested are read and stored
-    int fd          = INVALID;                              //Integer to hold the file descriptor of incoming request
-    char *mybuf;                                  //String to hold the contents of the file being requested
+    // int num_request = 0;                                    //Integer for tracking each request for printing into the log file
+    // int fileSize    = 0;                                    //Integer to hold the size of the file being requested
+    // void *memory    = NULL;                                 //memory pointer where contents being requested are read and stored
+    // int fd          = INVALID;                              //Integer to hold the file descriptor of incoming request
+    // char *mybuf;                                  //String to hold the contents of the file being requested
 
 
     /* TODO : Intermediate Submission 
      *    Description:      Get the id as an input argument from arg, set it to ID
      */
     int ID = *((int *) arg);
+    printf("Worker ID: %d\n", ID);
     
     while (1) {
         /* TODO
@@ -243,6 +251,7 @@ void *worker(void *arg) {
          *    send the file to the client using send_file_to_client(int socket, char * buffer, int size)              
          */
     }
+    return NULL;
 }
 
 int main(int argc , char *argv[]) {
@@ -311,8 +320,10 @@ int main(int argc , char *argv[]) {
      */
 
     dispatcher_threads = (pthread_t *) malloc(num_dispatcher * sizeof(pthread_t));
+    int dispatcher_thread_ids[num_dispatcher];
     for (int i = 0; i < num_dispatcher; ++i) {
-        int rc = pthread_create(&dispatcher_threads[i], NULL, dispatch, NULL);
+        dispatcher_thread_ids[i] = i;
+        int rc = pthread_create(&dispatcher_threads[i], NULL, dispatch, (void *) &dispatcher_thread_ids[i]);
         if (rc) {
             fprintf(stderr, "%s at %d: pthread_create() return %d\n", __FILE__, __LINE__, rc);
             free(dispatcher_threads);
@@ -321,8 +332,10 @@ int main(int argc , char *argv[]) {
     }
 
     worker_threads = (pthread_t *) malloc(num_worker * sizeof(pthread_t));
-    for (int i = 0; i < num_worker; ++i) {
-        int rc = pthread_create(&worker_threads[i], NULL, worker, (void *) &i);
+    int thread_nums[num_worker];
+    for (int j = 0; j < num_worker; ++j) {
+        thread_nums[j] = j;
+        int rc = pthread_create(&worker_threads[j], NULL, worker, (void *) &thread_nums[j]);
         if (rc) {
             fprintf(stderr, "%s at %d: pthread_create() return %d\n", __FILE__, __LINE__, rc);
             free(dispatcher_threads);

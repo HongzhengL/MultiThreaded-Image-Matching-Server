@@ -20,7 +20,8 @@ processing_args_t req_entries[100];
 * 7. Close the file and the socket
 */
 void * request_handle(void * args) {
-    char *file_name = (char *) args;
+    processing_args_t *processing_args = (processing_args_t *) args;
+    char *file_name = processing_args->file_name;
     FILE *file = fopen(file_name, "rb");
     if (!file) {
         fprintf(stderr, "%s at %d: Failed to open file %s\n", __FILE__, __LINE__, file_name);
@@ -45,6 +46,7 @@ void * request_handle(void * args) {
     
     close(socket);
     fclose(file);
+    return NULL;
 }
 
 /* TODO: Intermediate Submission
@@ -75,10 +77,13 @@ void directory_trav(char * args) {
                 exit(EXIT_FAILURE);
             }
             if (S_ISREG(filestat.st_mode)) {    // if regular file
-                printf("File: %s\n", path);
+                printf("79: File: %s\n", path);
                 // create a new thread to invoke the request_handle function
                 // pass the file path as an argument
-                pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) path);
+                // req_entries[worker_thread_id].file_name = path;
+                strcpy(req_entries[worker_thread_id].file_name, path);
+                req_entries[worker_thread_id].number_worker = worker_thread_id;
+                pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) &req_entries[worker_thread_id]);
                 worker_thread_id++;
             }
         } else {
@@ -106,6 +111,9 @@ int main(int argc, char *argv[]) {
     /*TODO: Intermediate Submission
      * Call the directory_trav function to traverse the directory and send the images to the server
      */
+    for (int i = 0; i < 100; i++) {
+        req_entries[i].file_name = (char *) malloc(sizeof(char) * 1028);
+    }
     directory_trav(argv[1]);
     // printf("All images processed successfully\n");
     int fd = setup_connection(port);
@@ -113,8 +121,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
     }
-    
 
+    for (int i = 0; i < 100; i++) {
+        free(req_entries[i].file_name);
+    }
     close(fd);
     return 0;  
 }
