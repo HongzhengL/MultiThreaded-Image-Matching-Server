@@ -171,9 +171,10 @@ void loadDatabase(char *path) {
 
 
 void *dispatch(void *arg)  {
-    int ID = *((int *) arg);
-    printf("Dispatch ID: %d\n", ID);
     while (1) {
+        int ID = *((int *) arg);
+        printf("Dispatch ID: %d\n", ID);
+
         size_t file_size = 0;
         request_detials_t request_details;
 
@@ -197,6 +198,7 @@ void *dispatch(void *arg)  {
             strcpy(request_details.buffer, request);
             printf("Request file size: %ld\n", request_details.filelength);
         }
+        pthread_exit(NULL);
         /* TODO
             *    Description:      Add the request into the queue
                 //(1) Copy the filename from get_request_server into allocated memory to put on request queue
@@ -230,7 +232,7 @@ void *worker(void *arg) {
      */
     int ID = *((int *) arg);
     printf("Worker ID: %d\n", ID);
-    
+    pthread_exit(NULL);
     while (1) {
         /* TODO
          *    Description:      Get the request from the queue and do as follows
