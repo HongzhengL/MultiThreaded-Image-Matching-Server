@@ -1,6 +1,6 @@
 #include "../include/server.h"
 
-#define MAX_DATEBASE_SIZE 100
+#define MAX_DATABASE_SIZE 100
 
 // /********************* [ Helpful Global Variables ] **********************/
 int num_dispatcher = 0; //Global integer to indicate the number of dispatcher threads   
@@ -27,18 +27,62 @@ int queue_len = 0; //Global integer to indicate the length of the queue
 pthread_t *dispatcher_threads;
 pthread_t *worker_threads;
 
-typedef struct simple_queue {
-    request_detials_t *requests;
+pthread_mutex_t req_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t not_full = PTHREAD_COND_INITIALIZER;
+typedef struct {
+    request_t *requests;
     int head;
     int tail;
     int size;
     int capacity;
-    pthread_mutex_t mutex;
-    pthread_cond_t not_empty;
-    pthread_cond_t not_full;
 } simple_queue_t;
 
-simple_queue_t req_queue[MAX_QUEUE_LEN];
+void queue_init(simple_queue_t *queue, int capacity) {
+    queue->requests = (request_t *) malloc(capacity * sizeof(request_t));
+    queue->head = 0;
+    queue->tail = 0;
+    queue->size = 0;
+    queue->capacity = capacity;
+}
+
+void queue_destroy(simple_queue_t *queue) {
+    free(queue->requests);
+}
+
+void enqueue(simple_queue_t *queue, request_t request) {
+    pthread_mutex_lock(&req_queue_mutex);
+    while (queue->size == queue->capacity) {
+        printf("Queue is full\n");
+        pthread_cond_wait(&not_full, &req_queue_mutex);
+    }
+    queue->requests[queue->tail] = request;
+    queue->tail = (queue->tail + 1) % queue->capacity;
+    queue->size++;
+    printf("------------Enque, current size: %d\n", queue->size);
+    pthread_cond_signal(&not_empty);
+    pthread_mutex_unlock(&req_queue_mutex);
+}
+
+request_t deque(simple_queue_t *queue) {
+    pthread_mutex_lock(&req_queue_mutex);
+    while (queue->size == 0) {
+        pthread_cond_wait(&not_empty, &req_queue_mutex);
+    }
+    request_t request;
+    memcpy(&request, &queue->requests[queue->head], sizeof(request_t));
+    queue->head = (queue->head + 1) % queue->capacity;
+    queue->size--;
+    printf("------------Deque, current size: %d\n", queue->size);
+    pthread_cond_signal(&not_full);
+    pthread_mutex_unlock(&req_queue_mutex);
+    return request;
+}
+
+simple_queue_t req_queue;
+
+database_entry_t database[MAX_DATABASE_SIZE];
+int database_size = 0;
 
 //TODO: Implement this function
 /**********************************************
@@ -51,28 +95,36 @@ simple_queue_t req_queue[MAX_QUEUE_LEN];
 ************************************************/
 //just uncomment out when you are ready to implement this function
 
-// database_entry_t image_match(char *input_image, int size) {
-//     const char *closest_file     = NULL;
-//     int         closest_distance = INT_MAX;
-//     int closest_index = 0;
-//     for(int i = 0; i < 0 /* replace with your database size*/; i++) {
-//         const char *current_file; /* TODO: assign to the buffer from the database struct*/
-//         int result = memcmp(input_image, current_file, size);
-//         if (result == 0) {
-//             return database[i];
-//         } else if (result < closest_distance) {
-//             closest_distance = result;
-//             closest_file     = current_file;
-//             closest_index = i;
-//         }
-//     }
+database_entry_t image_match(char *input_image, int size) {
+    int i = 0;
+    while (input_image[i] != '\0') {
+        i++;
+    }
+    printf("input_image_size: %d\n", i);
+    const char *closest_file     = NULL;
+    int         closest_distance = INT_MAX;
+    int closest_index = 0;
+    for(int i = 0; i < database_size; i++) {
+        const char *current_file; /* TODO: assign to the buffer from the database struct*/
+        current_file = database[i].buffer;
+        // printf("current_file_size: %d\n", database[i].file_size);
+        int result = memcmp(input_image, current_file, size);
+        if (result == 0) {
+            printf("database content: %s\n", database[i].file_name);
+            return database[i];
+        } else if (result < closest_distance) {
+            closest_distance = result;
+            closest_file     = current_file;
+            closest_index = i;
+        }
+    }
 
-//     if (closest_file != NULL) {
-//       return database[closest_index];
-//     } else {
-//       return database[closest_index];
-//     }
-// }
+    if (closest_file != NULL) {
+      return database[closest_index];
+    } else {
+      return database[closest_index];
+    }
+}
 
 //TODO: Implement this function
 /**********************************************
@@ -84,12 +136,12 @@ simple_queue_t req_queue[MAX_QUEUE_LEN];
    - returns:
        - no return value
 ************************************************/
-void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, char * file_name, int file_size) {
-    // if (to_write == NULL) {
-    //     fprintf(stderr, "[%d] [%d] [%s] [%d] \n", threadId, requestNumber, file_name, file_size);
-    // } else {
-    //     fprintf(to_write, "[%d] [%d] [%s] [%d] \n", threadId, requestNumber, file_name, file_size);
-    // }
+void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, int fd, char * file_name, int file_size) {
+    if (to_write == NULL) {
+        fprintf(stderr, "[%d] [%d] [%d] [%s] [%d] \n", threadId, requestNumber, fd, file_name, file_size);
+    } else {
+        fprintf(to_write, "[%d] [%d] [%d] [%s] [%d] \n", threadId, requestNumber, fd, file_name, file_size);
+    }
 }
 /*
   TODO: Implement this function for Intermediate Submission
@@ -109,9 +161,6 @@ void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, char * file
           - You will need to increment the number of images in the database
 */
 /***********/
-
-database_entry_t database[MAX_DATEBASE_SIZE];
-int database_size = 0;
 
 void loadDatabase(char *path) {
     DIR *dir;
@@ -169,14 +218,13 @@ void loadDatabase(char *path) {
     }
 }
 
-
 void *dispatch(void *arg)  {
     while (1) {
         int ID = *((int *) arg);
         printf("Dispatch ID: %d\n", ID);
 
         size_t file_size = 0;
-        request_detials_t request_details;
+        request_details_t request_detail;
 
         /* TODO: Intermediate Submission
          *    Description:      Accept client connection
@@ -194,11 +242,11 @@ void *dispatch(void *arg)  {
         if (request == NULL) {
             continue;
         } else {
-            request_details.filelength = file_size;
-            strcpy(request_details.buffer, request);
-            printf("Request file size: %ld\n", request_details.filelength);
+            request_detail.filelength = file_size;
+            strcpy(request_detail.buffer, request);
+            printf("Request file size: %ld\n", request_detail.filelength);
         }
-        pthread_exit(NULL);
+
         /* TODO
             *    Description:      Add the request into the queue
                 //(1) Copy the filename from get_request_server into allocated memory to put on request queue
@@ -214,17 +262,23 @@ void *dispatch(void *arg)  {
 
                 //(6) Release the lock on the request queue and signal that the queue is not empty anymore
          */
+        request_t queue_request;
+        queue_request.file_size = file_size;
+        queue_request.file_descriptor = socketfd;
+        queue_request.buffer = request_detail.buffer;
+        enqueue(&req_queue, queue_request);
+        
     }
     return NULL;
 }
 
 void *worker(void *arg) {
 
-    // int num_request = 0;                                    //Integer for tracking each request for printing into the log file
-    // int fileSize    = 0;                                    //Integer to hold the size of the file being requested
-    // void *memory    = NULL;                                 //memory pointer where contents being requested are read and stored
-    // int fd          = INVALID;                              //Integer to hold the file descriptor of incoming request
-    // char *mybuf;                                  //String to hold the contents of the file being requested
+    int num_request = 0;                                    //Integer for tracking each request for printing into the log file
+    int fileSize    = 0;                                    //Integer to hold the size of the file being requested
+    void *memory    = NULL;                                 //memory pointer where contents being requested are read and stored
+    int fd          = INVALID;                              //Integer to hold the file descriptor of incoming request
+    char *mybuf;                                  //String to hold the contents of the file being requested
 
 
     /* TODO : Intermediate Submission 
@@ -232,7 +286,7 @@ void *worker(void *arg) {
      */
     int ID = *((int *) arg);
     printf("Worker ID: %d\n", ID);
-    pthread_exit(NULL);
+
     while (1) {
         /* TODO
          *    Description:      Get the request from the queue and do as follows
@@ -245,13 +299,35 @@ void *worker(void *arg) {
 
          //(5) Fire the request queue not full signal to indicate the queue has a slot opened up and release the request queue lock  
          */
-            
-        
+        request_t request = deque(&req_queue);
+        printf("request detail: %d %d\n", request.file_size, request.file_descriptor);
+
+        fd = request.file_descriptor;
+        fileSize = request.file_size;
+        mybuf = (char *)malloc(fileSize);
+        memcpy(mybuf, request.buffer, fileSize);
+        memory = malloc(fileSize);
+        if (memory == NULL) {
+            fprintf(stderr, "%s at %d: Could not allocate memory for file\n", __FILE__, __LINE__);
+            close(fd);
+            continue;
+        }
+        memcpy(memory, mybuf, fileSize);
+
         /* TODO
          *    Description:       Call image_match with the request buffer and file size
          *    store the result into a typeof database_entry_t
          *    send the file to the client using send_file_to_client(int socket, char * buffer, int size)              
          */
+        database_entry_t result = image_match(mybuf, fileSize);
+        send_file_to_client(fd, result.buffer, result.file_size);
+        printf("Breakpoint 1\n");
+
+        free(mybuf);
+        free(memory);
+        num_request++;
+        LogPrettyPrint(logfile, ID, num_request, fd, result.file_name, result.file_size);
+        LogPrettyPrint(NULL, ID, num_request, fd, result.file_name, result.file_size);
     }
     return NULL;
 }
@@ -287,6 +363,9 @@ int main(int argc , char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // initialize the request queue
+    queue_init(&req_queue, queue_len);
+
     /* TODO: Intermediate Submission
      *    Description:      Open log file
      *    Hint:             Use Global "File* logfile", use "server_log" as the name, what open flags do you want?
@@ -296,7 +375,6 @@ int main(int argc , char *argv[]) {
         fprintf(stderr, "%s at %d: Could not open log file\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
     }
- 
 
     /* TODO: Intermediate Submission
      *    Description:      Start the server
@@ -307,12 +385,13 @@ int main(int argc , char *argv[]) {
     /* TODO : Intermediate Submission
      *    Description:      Load the database
      */
-    for (int i = 0; i < MAX_DATEBASE_SIZE; ++i) {
+    for (int i = 0; i < MAX_DATABASE_SIZE; ++i) {
         database[i].file_name = NULL;
         database[i].file_size = 0;
         database[i].buffer = NULL;
     }
     loadDatabase(path);
+    printf("database_size: %d\n", database_size);
 
     /* TODO: Intermediate Submission
      *    Description:      Create dispatcher and worker threads 
@@ -364,6 +443,7 @@ int main(int argc , char *argv[]) {
     fprintf(stderr, "SERVER DONE \n");  // will never be reached in SOLUTION
     fclose(logfile);//closing the log files
 
+    queue_destroy(&req_queue);
     free(dispatcher_threads);
     free(worker_threads);
 }

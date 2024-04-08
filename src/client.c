@@ -44,8 +44,12 @@ void * request_handle(void * args) {
     int socket = setup_connection(port);
     send_file_to_server(socket, file, file_size);
 
-    
-    close(socket);
+    char *out_path = (char *) malloc(sizeof(char) * 1028);
+    sprintf(out_path, "%s/%s", output_path, file_name);
+    receive_file_from_server(socket, out_path);
+
+    free(out_path);
+    // close(socket);
     fclose(file);
     return NULL;
 }
