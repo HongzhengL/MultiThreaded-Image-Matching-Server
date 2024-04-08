@@ -30,18 +30,22 @@ pthread_t *worker_threads;
 int worker_ids[MAX_THREADS];
 int dispatch_ids[MAX_THREADS];
 
-typedef struct simple_queue {
-    request_detials_t *requests;
-    int head;
-    int tail;
-    int size;
-    int capacity;
-    pthread_mutex_t mutex;
-    pthread_cond_t not_empty;
-    pthread_cond_t not_full;
-} simple_queue_t;
+typedef struct request_node {
+    request_t *request;
+    struct request_node *next;
+};
 
-simple_queue_t req_queue[MAX_QUEUE_LEN];
+struct request_node *head_req;
+struct request_node *tail_req;
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t not_full = PTHREAD_COND_INITIALIZER;
+
+
+
+database_entry_t database[MAX_DATEBASE_SIZE];
+int database_size = 0;
 
 //TODO: Implement this function
 /**********************************************
@@ -57,8 +61,9 @@ database_entry_t image_match(char *input_image, int size) {
     // const char *closest_file     = NULL;
     // int         closest_distance = INT_MAX;
     // int closest_index = 0;
-    // for(int i = 0; i < 0 /* replace with your database size*/; i++) {
-    //     const char *current_file; /* TODO: assign to the buffer from the database struct*/
+    // for(int i = 0; i < 0 database_size; i++) {
+    //     const char *current_file; 
+    //     memcpy(current_file, database[i].buffer, sizeof(database[i].buffer)); /* assign to the buffer from the database struct*/
     //     int result = memcmp(input_image, current_file, size);
     //     if (result == 0) {
     //         return database[i];
@@ -112,8 +117,7 @@ void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, char * file
 */
 /***********/
 
-database_entry_t database[MAX_DATEBASE_SIZE];
-int database_size = 0;
+
 
 void loadDatabase(char *path) {
     DIR *dir;
@@ -175,10 +179,10 @@ void loadDatabase(char *path) {
 void *dispatch(void *arg)  {
     while (1) {
         size_t file_size = 0;
-        request_detials_t request_details;
-
+        struct request_node *req_node;
+        
         int ID = *((int *) arg);
-        printf("Dispatch ID: %d\n", ID);
+        fprintf(stderr,"Dispatch ID: %d\n", ID);
         /* TODO: Intermediate Submission
          *    Description:      Accept client connection
          *    Utility Function: int accept_connection(void)
@@ -195,8 +199,7 @@ void *dispatch(void *arg)  {
         if (request == NULL) {
             continue;
         }
-        printf("Request file size: %ld\n", file_size);
-        pthread_exit(NULL);
+        fprintf(stderr,"Request file size: %ld\n", file_size);
         /* TODO
             *    Description:      Add the request into the queue
                 //(1) Copy the filename from get_request_server into allocated memory to put on request queue
@@ -212,6 +215,51 @@ void *dispatch(void *arg)  {
 
                 //(6) Release the lock on the request queue and signal that the queue is not empty anymore
          */
+        int retval = 0;
+        if ((retval = pthread_mutex_lock(&mutex)) != 0) {
+            fprintf(stderr, "Error in Dispatcher %d, failed to obtain lock, error: %d\n", ID, retval);
+            free(request);
+            pthread_exit(NULL);
+        }
+
+        if (queue_len >= MAX_QUEUE_LEN) {
+            fprintf(stderr, "Dispatcher ID: %d : Queue Full, Waiting...\n", ID);
+            if ((retval = pthread_cond_wait(&not_full, &mutex)) != 0) {
+                fprintf(stderr, "Error in Dispatcher %d, Not full wait error: %d\n", ID, retval);
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(NULL);
+            }
+        }
+
+        fprintf(stderr, "Dispatcher ID: %d, Creating Request.\n", ID);
+        req_node = malloc(sizeof(struct request_node));
+        req_node->request = (request_t *)malloc(sizeof(request_t *));
+        req_node->next = NULL;
+
+        fprintf(stderr, "Dispatcher ID: %d, Moving data to new node\n", ID);
+        req_node->request->file_size = file_size;
+        req_node->request->buffer = (char *)malloc(sizeof(request));
+        *req_node->request->buffer = *request;
+
+        fprintf(stderr, "Dispatcher ID %d, Adding to tail\n", ID);
+        tail_req->next = malloc(sizeof(req_node));
+        *tail_req->next = *req_node;
+        tail_req = tail_req->next;
+        ++queue_len;
+
+        if (queue_len > 0) {
+            fprintf(stderr, "Signaling no longer empty queue\n");
+            if ((retval = pthread_cond_signal(&not_empty)) != 0) {
+                fprintf(stderr, "Error in Dispatcher %d, Not empty signal error: %d\n", ID, retval);
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(NULL);
+            }
+        }
+
+        free(request);
+        free(req_node);
+        pthread_mutex_unlock(&mutex);
+
     }
     return NULL;
 }
@@ -229,12 +277,13 @@ void *worker(void *arg) {
      *    Description:      Get the id as an input argument from arg, set it to ID
      */
     int ID = *((int *) arg);
-    printf("Worker ID: %d\n", ID);
-    pthread_exit(NULL);
+    fprintf(stderr,"Worker ID: %d\n", ID);
+   
     while (1) {
         /* TODO
          *    Description:      Get the request from the queue and do as follows
          //(1) Request thread safe access to the request queue by getting the req_queue_mutex lock
+
          //(2) While the request queue is empty conditionally wait for the request queue lock once the not empty signal is raised
 
          //(3) Now that you have the lock AND the queue is not empty, read from the request queue
@@ -243,8 +292,26 @@ void *worker(void *arg) {
 
          //(5) Fire the request queue not full signal to indicate the queue has a slot opened up and release the request queue lock  
          */
-            
-        
+        pthread_mutex_lock(&mutex);
+        fprintf(stderr, "Worker ID: %d, Locking...\n", ID);
+
+        if (queue_len < 1) {
+            fprintf(stderr, "Worker ID: %d, Queue Empty, waiting....\n", ID);
+            pthread_cond_wait(&not_empty, &mutex);
+            fprintf(stderr,"Worker ID %d, No longer waiting.\n", ID);
+        }
+        fprintf("Worker %d, Beginning Work.\n", ID);
+        fprintf(stderr, "Worker ID %d, Request Size: %d\n", ID, head_req->next->request->file_size);
+        struct request_node *temp = head_req;
+        head_req = head_req->next;
+        free(temp);
+        pthread_mutex_unlock(&mutex);
+
+        if (queue_len < MAX_QUEUE_LEN) {
+            pthread_cond_signal(&not_full);
+        }
+        --queue_len;
+        pthread_exit(NULL);
         /* TODO
          *    Description:       Call image_match with the request buffer and file size
          *    store the result into a typeof database_entry_t
@@ -260,12 +327,19 @@ int main(int argc , char *argv[]) {
     }
 
 
+
     int port            = -1;
     char path[BUFF_SIZE] = "no path set\0";
     num_dispatcher      = -1;                               //global variable
     num_worker          = -1;                               //global variable
     queue_len           = -1;                               //global variable
- 
+    
+    // allocating space for linked list
+    tail_req = malloc(sizeof(struct request_node));
+    tail_req->request = (request_t *)malloc(sizeof(request_t));
+    tail_req->next = malloc(sizeof(struct request_node));
+    head_req = tail_req;
+
 
     /* TODO: Intermediate Submission
      *    Description:      Get the input args --> (1) port (2) path (3) num_dispatcher (4) num_workers  (5) queue_length
@@ -293,6 +367,8 @@ int main(int argc , char *argv[]) {
         fprintf(stderr, "%s at %d: Could not open log file\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
     }
+    int logfd = fileno(logfile);
+    dup2(logfd, STDERR_FILENO);
  
 
     /* TODO: Intermediate Submission
@@ -363,4 +439,6 @@ int main(int argc , char *argv[]) {
 
     free(dispatcher_threads);
     free(worker_threads);
+    free(head_req);
+    free(tail_req);
 }
