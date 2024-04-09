@@ -355,7 +355,11 @@ int main(int argc , char *argv[]) {
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
 
+    sigaction(SIGKILL, &action, NULL);
     sigaction(SIGINT, &action, NULL);
+    sigaction(SIGTERM, &action, NULL);
+    sigaction(SIGQUIT, &action, NULL);
+    sigaction(SIGHUP, &action, NULL);
 
     int port            = -1;
     char path[BUFF_SIZE] = "no path set\0";
