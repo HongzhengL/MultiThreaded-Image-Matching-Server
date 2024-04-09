@@ -137,9 +137,9 @@ database_entry_t image_match(char *input_image, int size) {
 ************************************************/
 void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, int fd, char * file_name, int file_size) {
     if (to_write == NULL) {
-        fprintf(stderr, "[%d] [%d] [%d] [%s] [%d] \n", threadId, requestNumber, fd, file_name, file_size);
+        fprintf(stderr, "[%d] [%d] [%d] [%s] [%d]\n", threadId, requestNumber, fd, file_name, file_size);
     } else {
-        fprintf(to_write, "[%d] [%d] [%d] [%s] [%d] \n", threadId, requestNumber, fd, file_name, file_size);
+        fprintf(to_write, "[%d] [%d] [%d] [%s] [%d]\n", threadId, requestNumber, fd, file_name, file_size);
     }
 }
 /*
@@ -303,7 +303,9 @@ void *worker(void *arg) {
 
         fd = request.file_descriptor;
         fileSize = request.file_size;
-        if (fileSize == 0) continue;
+        if (fileSize == 0) {
+            continue;
+        }
         mybuf = (char *)malloc(fileSize);
         memcpy(mybuf, request.buffer, fileSize);
         memory = malloc(fileSize);
@@ -334,12 +336,26 @@ void *worker(void *arg) {
     return NULL;
 }
 
+void signal_handler(int signum) {
+    fclose(logfile);
+    free(dispatcher_threads);
+    free(worker_threads);
+    queue_destroy(&req_queue);
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc , char *argv[]) {
     if(argc != 6) {
         printf("usage: %s port path num_dispatcher num_workers queue_length \n", argv[0]);
         return -1;
     }
 
+    struct sigaction action;
+    action.sa_handler = signal_handler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+
+    sigaction(SIGINT, &action, NULL);
 
     int port            = -1;
     char path[BUFF_SIZE] = "no path set\0";
