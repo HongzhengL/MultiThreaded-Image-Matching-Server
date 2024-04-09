@@ -47,27 +47,41 @@ void queue_init(simple_queue_t *queue, int capacity) {
 }
 
 void queue_destroy(simple_queue_t *queue) {
-    for (int i = 0; i < queue->capacity; i++) {
-        free(queue->requests[i].buffer);
-    }
-    free(queue->requests);
+    for (int i = 0; i < queue->capacity; i++)
+        if (queue->requests[i].buffer)
+            free(queue->requests[i].buffer);
+    if (queue->requests)
+        free(queue->requests);
 }
 
 void enqueue(simple_queue_t *queue, request_t request) {
-    pthread_mutex_lock(&req_queue_mutex);
+    int error = 0;
+    if (error = pthread_mutex_lock(&req_queue_mutex)) {
+        fprintf(stderr, "%s at %d: pthread_mutex_lock() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
     while (queue->size == queue->capacity) {
         pthread_cond_wait(&not_full, &req_queue_mutex);
     }
     queue->requests[queue->tail] = request;
     queue->tail = (queue->tail + 1) % queue->capacity;
     queue->size++;
-    printf("------------Enque, current size: %d\n", queue->size);
-    pthread_cond_signal(&not_empty);
-    pthread_mutex_unlock(&req_queue_mutex);
+    if (error = pthread_cond_signal(&not_empty)) {
+        fprintf(stderr, "%s at %d: pthread_cond_signal() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
+    if (error = pthread_mutex_unlock(&req_queue_mutex)) {
+        fprintf(stderr, "%s at %d: pthread_mutex_unlock() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
 }
 
 request_t deque(simple_queue_t *queue) {
-    pthread_mutex_lock(&req_queue_mutex);
+    int error = 0;
+    if (error = pthread_mutex_lock(&req_queue_mutex)) {
+        fprintf(stderr, "%s at %d: pthread_mutex_lock() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
     while (queue->size == 0) {
         pthread_cond_wait(&not_empty, &req_queue_mutex);
     }
@@ -75,9 +89,14 @@ request_t deque(simple_queue_t *queue) {
     memcpy(&request, &queue->requests[queue->head], sizeof(request_t));
     queue->head = (queue->head + 1) % queue->capacity;
     queue->size--;
-    printf("------------Deque, current size: %d\n", queue->size);
-    pthread_cond_signal(&not_full);
-    pthread_mutex_unlock(&req_queue_mutex);
+    if (error = pthread_cond_signal(&not_full)) {
+        fprintf(stderr, "%s at %d: pthread_cond_signal() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
+    if (error = pthread_mutex_unlock(&req_queue_mutex)) {
+        fprintf(stderr, "%s at %d: pthread_mutex_unlock() return %d\n", __FILE__, __LINE__, error);
+        exit(EXIT_FAILURE);
+    }
     return request;
 }
 
@@ -98,8 +117,6 @@ int database_size = 0;
 //just uncomment out when you are ready to implement this function
 
 database_entry_t image_match(char *input_image, int size) {
-    int i = strlen(input_image);
-    printf("input_image_size: %d\n", i);
     const char *closest_file     = NULL;
     int         closest_distance = INT_MAX;
     int closest_index = 0;
@@ -266,7 +283,6 @@ void *dispatch(void *arg)  {
         queue_request.buffer = (char *)malloc(file_size);
         memcpy(queue_request.buffer, request_detail.buffer, file_size);
         enqueue(&req_queue, queue_request);
-        
     }
     return NULL;
 }
@@ -287,7 +303,6 @@ void *worker(void *arg) {
     printf("Worker ID: %d\n", ID);
 
     while (1) {
-        printf("Start of worker----------------\n");
         /* TODO
          *    Description:      Get the request from the queue and do as follows
          //(1) Request thread safe access to the request queue by getting the req_queue_mutex lock
@@ -322,24 +337,27 @@ void *worker(void *arg) {
          *    send the file to the client using send_file_to_client(int socket, char * buffer, int size)              
          */
         database_entry_t result = image_match(mybuf, fileSize);
-        printf("Sending file to client\n");
         send_file_to_client(fd, result.buffer, result.file_size);
-        printf("File sent to client\n");
 
         free(mybuf);
         free(memory);
         num_request++;
         LogPrettyPrint(logfile, ID, num_request, fd, result.file_name, result.file_size);
         LogPrettyPrint(NULL, ID, num_request, fd, result.file_name, result.file_size);
-        printf("End of worker----------------\n");
+        if (close(fd) < 0) {
+            fprintf(stderr, "%s at %d: close() failed, errno = %d\n", __FILE__, __LINE__, errno);
+        }
     }
     return NULL;
 }
 
 void signal_handler(int signum) {
-    fclose(logfile);
-    free(dispatcher_threads);
-    free(worker_threads);
+    if (logfile)
+        fclose(logfile);
+    if (dispatcher_threads)
+        free(dispatcher_threads);
+    if (worker_threads)
+        free(worker_threads);
     queue_destroy(&req_queue);
     exit(EXIT_SUCCESS);
 }
@@ -413,7 +431,6 @@ int main(int argc , char *argv[]) {
         database[i].buffer = NULL;
     }
     loadDatabase(path);
-    printf("database_size: %d\n", database_size);
 
     /* TODO: Intermediate Submission
      *    Description:      Create dispatcher and worker threads 
