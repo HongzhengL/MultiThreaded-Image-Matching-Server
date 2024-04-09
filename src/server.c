@@ -47,13 +47,15 @@ void queue_init(simple_queue_t *queue, int capacity) {
 }
 
 void queue_destroy(simple_queue_t *queue) {
+    for (int i = 0; i < queue->capacity; i++) {
+        free(queue->requests[i].buffer);
+    }
     free(queue->requests);
 }
 
 void enqueue(simple_queue_t *queue, request_t request) {
     pthread_mutex_lock(&req_queue_mutex);
     while (queue->size == queue->capacity) {
-        printf("Queue is full\n");
         pthread_cond_wait(&not_full, &req_queue_mutex);
     }
     queue->requests[queue->tail] = request;
@@ -96,26 +98,23 @@ int database_size = 0;
 //just uncomment out when you are ready to implement this function
 
 database_entry_t image_match(char *input_image, int size) {
-    int i = 0;
-    while (input_image[i] != '\0') {
-        i++;
-    }
+    int i = strlen(input_image);
     printf("input_image_size: %d\n", i);
     const char *closest_file     = NULL;
     int         closest_distance = INT_MAX;
     int closest_index = 0;
+    int closest_file_size = INT_MAX;
     for(int i = 0; i < database_size; i++) {
         const char *current_file; /* TODO: assign to the buffer from the database struct*/
         current_file = database[i].buffer;
-        // printf("current_file_size: %d\n", database[i].file_size);
         int result = memcmp(input_image, current_file, size);
         if (result == 0) {
-            printf("database content: %s\n", database[i].file_name);
             return database[i];
-        } else if (result < closest_distance) {
+        } else if (result < closest_distance || (result == closest_distance && database[i].file_size < closest_file_size)) {
             closest_distance = result;
             closest_file     = current_file;
             closest_index = i;
+            closest_file_size = database[i].file_size;
         }
     }
 
@@ -243,8 +242,7 @@ void *dispatch(void *arg)  {
             continue;
         } else {
             request_detail.filelength = file_size;
-            strcpy(request_detail.buffer, request);
-            printf("Request file size: %ld\n", request_detail.filelength);
+            memcpy(request_detail.buffer, request, file_size);
         }
 
         /* TODO
@@ -265,7 +263,8 @@ void *dispatch(void *arg)  {
         request_t queue_request;
         queue_request.file_size = file_size;
         queue_request.file_descriptor = socketfd;
-        queue_request.buffer = request_detail.buffer;
+        queue_request.buffer = (char *)malloc(file_size);
+        memcpy(queue_request.buffer, request_detail.buffer, file_size);
         enqueue(&req_queue, queue_request);
         
     }
@@ -288,6 +287,7 @@ void *worker(void *arg) {
     printf("Worker ID: %d\n", ID);
 
     while (1) {
+        printf("Start of worker----------------\n");
         /* TODO
          *    Description:      Get the request from the queue and do as follows
          //(1) Request thread safe access to the request queue by getting the req_queue_mutex lock
@@ -300,10 +300,10 @@ void *worker(void *arg) {
          //(5) Fire the request queue not full signal to indicate the queue has a slot opened up and release the request queue lock  
          */
         request_t request = deque(&req_queue);
-        printf("request detail: %d %d\n", request.file_size, request.file_descriptor);
 
         fd = request.file_descriptor;
         fileSize = request.file_size;
+        if (fileSize == 0) continue;
         mybuf = (char *)malloc(fileSize);
         memcpy(mybuf, request.buffer, fileSize);
         memory = malloc(fileSize);
@@ -320,14 +320,16 @@ void *worker(void *arg) {
          *    send the file to the client using send_file_to_client(int socket, char * buffer, int size)              
          */
         database_entry_t result = image_match(mybuf, fileSize);
+        printf("Sending file to client\n");
         send_file_to_client(fd, result.buffer, result.file_size);
-        printf("Breakpoint 1\n");
+        printf("File sent to client\n");
 
         free(mybuf);
         free(memory);
         num_request++;
         LogPrettyPrint(logfile, ID, num_request, fd, result.file_name, result.file_size);
         LogPrettyPrint(NULL, ID, num_request, fd, result.file_name, result.file_size);
+        printf("End of worker----------------\n");
     }
     return NULL;
 }

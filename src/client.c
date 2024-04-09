@@ -10,6 +10,14 @@ char output_path[1028];
 
 processing_args_t req_entries[100];
 
+char* get_file_name(char *path) {
+    char *file_name = strrchr(path, '/');
+    if (file_name == NULL) {
+        return path;
+    }
+    return file_name + 1;
+}
+
 /* TODO: implement the request_handle function to send the image to the server and recieve the processed image
 * 1. Open the file in the read-binary mode - Intermediate Submission
 * 2. Get the file length using the fseek and ftell functions - Intermediate Submission
@@ -45,7 +53,7 @@ void * request_handle(void * args) {
     send_file_to_server(socket, file, file_size);
 
     char *out_path = (char *) malloc(sizeof(char) * 1028);
-    sprintf(out_path, "%s/%s", output_path, file_name);
+    sprintf(out_path, "%s/%s", output_path, get_file_name(file_name));
     receive_file_from_server(socket, out_path);
 
     free(out_path);
@@ -84,7 +92,6 @@ void directory_trav(char * args) {
             if (S_ISREG(filestat.st_mode)) {    // if regular file
                 // create a new thread to invoke the request_handle function
                 // pass the file path as an argument
-                // req_entries[worker_thread_id].file_name = path;
                 strcpy(req_entries[worker_thread_id].file_name, path);
                 req_entries[worker_thread_id].number_worker = worker_thread_id;
                 pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) &req_entries[worker_thread_id]);
