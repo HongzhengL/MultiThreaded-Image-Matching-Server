@@ -56,7 +56,7 @@ void queue_destroy(simple_queue_t *queue) {
 
 void enqueue(simple_queue_t *queue, request_t request) {
     int error = 0;
-    if (error = pthread_mutex_lock(&req_queue_mutex)) {
+    if ((error = pthread_mutex_lock(&req_queue_mutex))) {
         fprintf(stderr, "%s at %d: pthread_mutex_lock() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
@@ -66,11 +66,11 @@ void enqueue(simple_queue_t *queue, request_t request) {
     queue->requests[queue->tail] = request;
     queue->tail = (queue->tail + 1) % queue->capacity;
     queue->size++;
-    if (error = pthread_cond_signal(&not_empty)) {
+    if ((error = pthread_cond_signal(&not_empty))) {
         fprintf(stderr, "%s at %d: pthread_cond_signal() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
-    if (error = pthread_mutex_unlock(&req_queue_mutex)) {
+    if ((error = pthread_mutex_unlock(&req_queue_mutex))) {
         fprintf(stderr, "%s at %d: pthread_mutex_unlock() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
@@ -78,7 +78,7 @@ void enqueue(simple_queue_t *queue, request_t request) {
 
 request_t deque(simple_queue_t *queue) {
     int error = 0;
-    if (error = pthread_mutex_lock(&req_queue_mutex)) {
+    if ((error = pthread_mutex_lock(&req_queue_mutex))) {
         fprintf(stderr, "%s at %d: pthread_mutex_lock() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
@@ -89,11 +89,11 @@ request_t deque(simple_queue_t *queue) {
     memcpy(&request, &queue->requests[queue->head], sizeof(request_t));
     queue->head = (queue->head + 1) % queue->capacity;
     queue->size--;
-    if (error = pthread_cond_signal(&not_full)) {
+    if ((error = pthread_cond_signal(&not_full))) {
         fprintf(stderr, "%s at %d: pthread_cond_signal() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
-    if (error = pthread_mutex_unlock(&req_queue_mutex)) {
+    if ((error = pthread_mutex_unlock(&req_queue_mutex))) {
         fprintf(stderr, "%s at %d: pthread_mutex_unlock() return %d\n", __FILE__, __LINE__, error);
         exit(EXIT_FAILURE);
     }
