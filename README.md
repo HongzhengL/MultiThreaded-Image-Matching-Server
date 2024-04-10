@@ -15,20 +15,14 @@
 
 - csel-kh1250-13.cselabs.umn.edu
 
-### Any changes you made to the Makefile or existing files that would affect grading
-
-- Adding `make zip`, `make run`, `make kill` to the Makefile.
-
-- Code styling changes on given files.
-
-### Plan outlining individual contributions for each member of your group
+### Members’ individual contributions
 
 - Elias Vera-Jimenez
-  - Implementing the worker threads.
-  - Implementing the dispatcher threads.
-  - Implementing the logging system.
-  - Implementing the error handling system.
-  - Testing the server and client code.
+    - Implementing the worker threads.
+    - Implementing the dispatcher threads.
+    - Implementing the logging system.
+    - Implementing the error handling system.
+    - Testing the server and client code.
 
 - Hongzheng Li
     - Implementing the request queue.
@@ -37,11 +31,16 @@
     - Implementing the cleanup system.
     - Implementing Client and Server Communication
 
-### Plan on how you are going to construct the worker threads and how you will make use of mutex locks and condition variables
+### Any changes you made to the Makefile or existing files that would affect grading
 
-- Create `num_worker` of worker threads at server startup using `pthread_create()`
-- Implement a loop within each worker thread to continuously check for new requests.
-- Use a mutex lock to protect access to the shared request queue.
-- If the queue is empty, worker threads should wait on a condition variable until a new request is added.
-- Upon receiving a signal, a thread locks the mutex, processes a request from the queue, and then unlocks the mutex.
-- After adding a request to the queue, dispatcher threads signal a condition variable to wake up a waiting worker thread.
+- Adding `make zip` to the Makefile
+
+- Code styling changes on given files.
+
+### Any assumptions that you made that weren’t outlined in section 7
+
+- We assumed that the server would terminate after receiving `SIGINT`, `SIGTERM`,
+`SIGQUIT`, `SIGHUP` signals, and all other signals would caused the server to terminate abnormally.
+
+### How could you enable your program to make EACH individual request parallelized? (high-level pseudocode would be acceptable/preferred for this part)
+
