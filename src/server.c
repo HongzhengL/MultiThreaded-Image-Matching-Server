@@ -237,10 +237,12 @@ void loadDatabase(char *path) {
             memcpy(database[database_size].buffer, buffer, fileStat.st_size);
 
             database_size++;
-
+            
+            free(buffer);
             fclose(file);
         }
     }
+    closedir(dir);
 }
 
 void *dispatch(void *arg)  {
@@ -292,6 +294,7 @@ void *dispatch(void *arg)  {
         queue_request.buffer = (char *)malloc(file_size);
         memcpy(queue_request.buffer, request_detail.buffer, file_size);
         enqueue(&req_queue, queue_request);
+        free(request);
     }
     return NULL;
 }
@@ -373,6 +376,12 @@ void signal_handler(int signum) {
     if (worker_threads)
         free(worker_threads);
     queue_destroy(&req_queue);
+    for (int i = 0; i < database_size; ++i) {
+        if (database[i].file_name)
+            free(database[i].file_name);
+        if (database[i].buffer)
+            free(database[i].buffer);
+    }
     exit(EXIT_SUCCESS);
 }
 
