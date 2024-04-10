@@ -61,7 +61,10 @@ void enqueue(simple_queue_t *queue, request_t request) {
         exit(EXIT_FAILURE);
     }
     while (queue->size == queue->capacity) {
-        pthread_cond_wait(&not_full, &req_queue_mutex);
+        if ((error = pthread_cond_wait(&not_full, &req_queue_mutex))) {
+            fprintf(stderr, "%s at %d: pthread_cond_wait() return %d\n", __FILE__, __LINE__, error);
+            exit(EXIT_FAILURE);
+        }
     }
     queue->requests[queue->tail] = request;
     queue->tail = (queue->tail + 1) % queue->capacity;
@@ -83,10 +86,16 @@ request_t deque(simple_queue_t *queue) {
         exit(EXIT_FAILURE);
     }
     while (queue->size == 0) {
-        pthread_cond_wait(&not_empty, &req_queue_mutex);
+        if ((error = pthread_cond_wait(&not_empty, &req_queue_mutex))) {
+            fprintf(stderr, "%s at %d: pthread_cond_wait() return %d\n", __FILE__, __LINE__, error);
+            exit(EXIT_FAILURE);
+        }
     }
     request_t request;
-    memcpy(&request, &queue->requests[queue->head], sizeof(request_t));
+    request.buffer = (char *)malloc(queue->requests[queue->head].file_size);
+    request.file_size = queue->requests[queue->head].file_size;
+    request.file_descriptor = queue->requests[queue->head].file_descriptor;
+    memcpy(request.buffer, queue->requests[queue->head].buffer, queue->requests[queue->head].file_size);
     queue->head = (queue->head + 1) % queue->capacity;
     queue->size--;
     if ((error = pthread_cond_signal(&not_full))) {
@@ -347,13 +356,18 @@ void *worker(void *arg) {
         if (close(fd) < 0) {
             fprintf(stderr, "%s at %d: close() failed, errno = %d\n", __FILE__, __LINE__, errno);
         }
+        if (request.buffer) {
+            free(request.buffer);
+        }
     }
     return NULL;
 }
 
 void signal_handler(int signum) {
-    if (logfile)
+    if (logfile) {
+        fflush(logfile);
         fclose(logfile);
+    }
     if (dispatcher_threads)
         free(dispatcher_threads);
     if (worker_threads)
@@ -373,11 +387,22 @@ int main(int argc , char *argv[]) {
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
 
-    sigaction(SIGKILL, &action, NULL);
-    sigaction(SIGINT, &action, NULL);
-    sigaction(SIGTERM, &action, NULL);
-    sigaction(SIGQUIT, &action, NULL);
-    sigaction(SIGHUP, &action, NULL);
+    if (sigaction(SIGINT, &action, NULL) == -1) {
+        fprintf(stderr, "%s at %d: sigaction() return with %d\n", __FILE__, __LINE__, errno);
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGTERM, &action, NULL)) {
+        fprintf(stderr, "%s at %d: sigaction() return with %d\n", __FILE__, __LINE__, errno);
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGQUIT, &action, NULL)) {
+        fprintf(stderr, "%s at %d: sigaction() return with %d\n", __FILE__, __LINE__, errno);
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGHUP, &action, NULL)) {
+        fprintf(stderr, "%s at %d: sigaction() return with %d\n", __FILE__, __LINE__, errno);
+        exit(EXIT_FAILURE);
+    }
 
     int port            = -1;
     char path[BUFF_SIZE] = "no path set\0";
@@ -412,7 +437,7 @@ int main(int argc , char *argv[]) {
      */
     logfile = fopen("server_log", "w");
     if (logfile == NULL) {
-        fprintf(stderr, "%s at %d: Could not open log file\n", __FILE__, __LINE__);
+        fprintf(stderr, "%s at %d: fopen could not open log file\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
     }
 
@@ -480,8 +505,7 @@ int main(int argc , char *argv[]) {
         }
     }
     fprintf(stderr, "SERVER DONE \n");  // will never be reached in SOLUTION
-    fclose(logfile);//closing the log files
-
+    fclose(logfile);  // closing the log files
     queue_destroy(&req_queue);
     free(dispatcher_threads);
     free(worker_threads);

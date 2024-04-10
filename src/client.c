@@ -53,11 +53,15 @@ void * request_handle(void * args) {
     send_file_to_server(socket, file, file_size);
 
     char *out_path = (char *) malloc(sizeof(char) * 1028);
+    if (out_path == NULL) {
+        fprintf(stderr, "%s at %d: Failed to allocate memory for out_path\n", __FILE__, __LINE__);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
     sprintf(out_path, "%s/%s", output_path, get_file_name(file_name));
     receive_file_from_server(socket, out_path);
 
     free(out_path);
-    // close(socket);
     fclose(file);
     return NULL;
 }
@@ -75,6 +79,7 @@ void directory_trav(char * args) {
     DIR *dir;
     struct dirent *entry;
     struct stat filestat;
+    int error = 0;
 
     if(!(dir = opendir(args))) {
         fprintf(stderr, "%s at %d: Failed to open directory %s\n", __FILE__, __LINE__, args);
@@ -94,7 +99,10 @@ void directory_trav(char * args) {
                 // pass the file path as an argument
                 strcpy(req_entries[worker_thread_id].file_name, path);
                 req_entries[worker_thread_id].number_worker = worker_thread_id;
-                pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) &req_entries[worker_thread_id]);
+                if ((error = pthread_create(&worker_thread[worker_thread_id], NULL, request_handle, (void *) &req_entries[worker_thread_id]))) {
+                    fprintf(stderr, "%s at %d: Failed to create thread for %s\n", __FILE__, __LINE__, path);
+                    exit(EXIT_FAILURE);
+                }
                 worker_thread_id++;
             }
         } else {
@@ -103,7 +111,10 @@ void directory_trav(char * args) {
     }
 
     for (int i = 0; i < worker_thread_id; i++) {
-        pthread_join(worker_thread[i], NULL);
+        if ((error = pthread_join(worker_thread[i], NULL))) {
+            fprintf(stderr, "%s at %d: Failed to join thread %d\n", __FILE__, __LINE__, i);
+            exit(EXIT_FAILURE);
+        }
     }
 
     closedir(dir);
@@ -126,7 +137,7 @@ int main(int argc, char *argv[]) {
         req_entries[i].file_name = (char *) malloc(sizeof(char) * 1028);
     }
     directory_trav(argv[1]);
-    // printf("All images processed successfully\n");
+
     int fd = setup_connection(port);
     if (fd == -1) {
         fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
@@ -134,8 +145,13 @@ int main(int argc, char *argv[]) {
     }
 
     for (int i = 0; i < 100; i++) {
-        free(req_entries[i].file_name);
+        if (req_entries[i].file_name) {
+            free(req_entries[i].file_name);
+        }
     }
-    close(fd);
+    if (close(fd) == -1) {
+        fprintf(stderr, "%s at %d: Failed to close the socket\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
     return 0;  
 }
