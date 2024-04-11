@@ -295,7 +295,6 @@ void loadDatabase(char *path) {
  */
 void *dispatch(void *arg)  {
     while (1) {
-        int ID = *((int *) arg);
         size_t file_size = 0;
         request_details_t request_detail;
 
