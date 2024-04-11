@@ -81,7 +81,7 @@ void directory_trav(char * args) {
     struct stat filestat;
     int error = 0;
 
-    if(!(dir = opendir(args))) {
+    if (!(dir = opendir(args))) {
         fprintf(stderr, "%s at %d: Failed to open directory %s\n", __FILE__, __LINE__, args);
         exit(EXIT_FAILURE);
     }
@@ -121,7 +121,7 @@ void directory_trav(char * args) {
 }
 
 int main(int argc, char *argv[]) {
-    if(argc < 2) {
+    if (argc < 2) {
         fprintf(stderr, "Usage: ./client <directory path> <Server Port> <output path>\n");
         exit(-1);
     }
@@ -134,7 +134,11 @@ int main(int argc, char *argv[]) {
      * Call the directory_trav function to traverse the directory and send the images to the server
      */
     for (int i = 0; i < 100; i++) {
-        req_entries[i].file_name = (char *) malloc(sizeof(char) * 1028);
+        req_entries[i].file_name = (char *) malloc(sizeof(char) * BUFF_SIZE);
+        if (req_entries[i].file_name == NULL) {
+            fprintf(stderr, "%s at %d: Failed to allocate memory for req_entries[%d].file_name\n", __FILE__, __LINE__, i);
+            exit(EXIT_FAILURE);
+        }
     }
     directory_trav(argv[1]);
 
@@ -153,5 +157,5 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "%s at %d: Failed to close the socket\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
     }
-    return 0;  
+    return 0;
 }

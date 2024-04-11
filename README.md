@@ -2,6 +2,9 @@
 
 ## MultiThreaded Image Matching Server
 
+
+
+
 ### Project group number
 
 - Group 44
@@ -19,18 +22,15 @@
 
 - Elias Vera-Jimenez
     - Implementing the worker threads.
-    - Implementing the dispatcher threads.
     - Implementing the logging system.
-    - Implementing the error handling system.
     - Testing the server and client code.
     - Answering parallelism question in README
 
 - Hongzheng Li
     - Implementing the request queue.
-    - Implementing the image matching algorithm.
-    - Implementing the signal handling system.
+    - Implementing the dispatcher threads.
+    - Implementing the error handling system.
     - Implementing the cleanup system.
-    - Implementing Client and Server Communication
 
 ### Any changes you made to the Makefile or existing files that would affect grading
 
@@ -47,36 +47,36 @@
 
 To make each individual request parallelized, we would have to change the program to make it so the workers become their own processes instead of being threads. in this way, the program would become multi-process program that utilizes mutliple system cores rather than being one multi-threaded process. it would be structured like:
 
-```
+```pseudocode
 # IN server
 ... 
 dispatch ():
-  while not interrupted:
-    client = accept_connection()
-    image = get_request(client)
-    
-    worker_id = execute worker with parameter image
-    match = retrieve_result_from_worker(worker_id)
-    send_file_to_client(match, client)
-  exit server
+    while not interrupted:
+        client = accept_connection()
+        image = get_request(client)
+        
+        worker_id = execute worker with parameter image
+        match = retrieve_result_from_worker(worker_id)
+        send_file_to_client(match, client)
+    exit server
 ... # 
 
-#IN worker
+# IN worker
 database_arr[MAX_DATABASE_SIZE];
 database_size;
 
 load_database () : # Same as in server, load_database would be removed from server since database elements are mostly used in worker
-  open database/
-  while image in database/ :
-    get image from database/
-    store image in database_arr[database_size]
-    database_size+1
+    open database/
+    for image in database/ :
+        get image from database/
+        store image in database_arr[database_size]
+        database_size+1
 
 image_match(image) :
-  for i in database_size:
-    if image matches database[i]:
-     send_result_to_server(database[i])
-     exit worker
+    for i in database_size:
+        if image matches database[i]:
+            send_result_to_server(database[i])
+            exit worker
 ```
 
 

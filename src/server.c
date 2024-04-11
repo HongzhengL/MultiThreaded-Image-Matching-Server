@@ -3,10 +3,10 @@
 #define MAX_DATABASE_SIZE 100
 
 // /********************* [ Helpful Global Variables ] **********************/
-int num_dispatcher = 0; //Global integer to indicate the number of dispatcher threads   
-int num_worker = 0;  //Global integer to indicate the number of worker threads
-FILE *logfile;  //Global file pointer to the log file
-int queue_len = 0; //Global integer to indicate the length of the queue
+int num_dispatcher = 0;  // Global integer to indicate the number of dispatcher threads
+int num_worker = 0;  // Global integer to indicate the number of worker threads
+FILE *logfile;  // Global file pointer to the log file
+int queue_len = 0;  // Global integer to indicate the length of the queue
 
 /* TODO: Intermediate Submission
   TODO: Add any global variables that you may need to track the requests and threads
@@ -40,8 +40,16 @@ typedef struct {
 
 void queue_init(simple_queue_t *queue, int capacity) {
     queue->requests = (request_t *) malloc(capacity * sizeof(request_t));
+    if (!queue->requests) {
+        fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
     for (int i = 0; i < capacity; i++) {
         queue->requests[i].buffer = (char *)malloc(BUFFER_SIZE);
+        if (!queue->requests[i].buffer) {
+            fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+            exit(EXIT_FAILURE);
+        }
     }
     queue->head = 0;
     queue->tail = 0;
@@ -98,6 +106,10 @@ request_t deque(simple_queue_t *queue) {
     }
     request_t request;
     request.buffer = (char *)malloc(queue->requests[queue->head].file_size);
+    if (!request.buffer) {
+        fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
     request.file_size = queue->requests[queue->head].file_size;
     request.file_descriptor = queue->requests[queue->head].file_descriptor;
     memcpy(request.buffer, queue->requests[queue->head].buffer, queue->requests[queue->head].file_size);
@@ -119,7 +131,7 @@ simple_queue_t req_queue;
 database_entry_t database[MAX_DATABASE_SIZE];
 int database_size = 0;
 
-//TODO: Implement this function
+// TODO: Implement this function
 /**********************************************
  * image_match
    - parameters:
@@ -128,14 +140,14 @@ int database_size = 0;
    - returns:
        - database_entry_t that is the closest match to the input_image
 ************************************************/
-//just uncomment out when you are ready to implement this function
+// just uncomment out when you are ready to implement this function
 
 database_entry_t image_match(char *input_image, int size) {
     const char *closest_file     = NULL;
     int         closest_distance = INT_MAX;
     int closest_index = 0;
     int closest_file_size = INT_MAX;
-    for(int i = 0; i < database_size; i++) {
+    for (int i = 0; i < database_size; i++) {
         const char *current_file; /* TODO: assign to the buffer from the database struct*/
         current_file = database[i].buffer;
         int result = memcmp(input_image, current_file, size);
@@ -156,7 +168,7 @@ database_entry_t image_match(char *input_image, int size) {
     }
 }
 
-//TODO: Implement this function
+// TODO: Implement this function
 /**********************************************
  * LogPrettyPrint
    - parameters:
@@ -234,15 +246,28 @@ void loadDatabase(char *path) {
             }
 
             database[database_size].file_name = (char *)malloc(strlen(entry->d_name) + 1);
+            if (!database[database_size].file_name) {
+                fprintf(stderr, "%s at %d: Could not allocate memory for file name\n", __FILE__, __LINE__);
+                free(buffer);
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
             strcpy(database[database_size].file_name, entry->d_name);
 
             database[database_size].file_size = fileStat.st_size;
 
             database[database_size].buffer = (char *)malloc(fileStat.st_size);
+            if (!database[database_size].buffer) {
+                fprintf(stderr, "%s at %d: Could not allocate memory for file buffer\n", __FILE__, __LINE__);
+                free(database[database_size].file_name);
+                free(buffer);
+                fclose(file);
+                exit(EXIT_FAILURE);
+            }
             memcpy(database[database_size].buffer, buffer, fileStat.st_size);
 
             database_size++;
-            
+
             free(buffer);
             fclose(file);
         }
@@ -297,6 +322,12 @@ void *dispatch(void *arg)  {
         queue_request.file_size = file_size;
         queue_request.file_descriptor = socketfd;
         queue_request.buffer = (char *)malloc(file_size);
+        if (!queue_request.buffer) {
+            fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+            free(request);
+            close(socketfd);
+            exit(EXIT_FAILURE);
+        }
         memcpy(queue_request.buffer, request_detail.buffer, file_size);
         enqueue(&req_queue, queue_request);
         free(queue_request.buffer);
@@ -306,12 +337,11 @@ void *dispatch(void *arg)  {
 }
 
 void *worker(void *arg) {
-
-    int num_request = 0;                                    //Integer for tracking each request for printing into the log file
-    int fileSize    = 0;                                    //Integer to hold the size of the file being requested
-    void *memory    = NULL;                                 //memory pointer where contents being requested are read and stored
-    int fd          = INVALID;                              //Integer to hold the file descriptor of incoming request
-    char *mybuf;                                  //String to hold the contents of the file being requested
+    int num_request = 0;                                    // Integer for tracking each request for printing into the log file
+    int fileSize    = 0;                                    // Integer to hold the size of the file being requested
+    void *memory    = NULL;                                 // memory pointer where contents being requested are read and stored
+    int fd          = INVALID;                              // Integer to hold the file descriptor of incoming request
+    char *mybuf;                                  // String to hold the contents of the file being requested
 
 
     /* TODO : Intermediate Submission 
@@ -340,8 +370,13 @@ void *worker(void *arg) {
             continue;
         }
         mybuf = (char *)malloc(fileSize);
+        if (mybuf == NULL) {
+            fprintf(stderr, "%s at %d: Could not allocate memory for file\n", __FILE__, __LINE__);
+            close(fd);
+            continue;
+        }
         memcpy(mybuf, request.buffer, fileSize);
-        memory = malloc(fileSize);
+        memory = (char *)malloc(fileSize);
         if (memory == NULL) {
             fprintf(stderr, "%s at %d: Could not allocate memory for file\n", __FILE__, __LINE__);
             close(fd);
@@ -390,7 +425,7 @@ void signal_handler(int signum) {
 }
 
 int main(int argc , char *argv[]) {
-    if(argc != 6) {
+    if (argc != 6) {
         printf("usage: %s port path num_dispatcher num_workers queue_length \n", argv[0]);
         return -1;
     }
@@ -419,10 +454,10 @@ int main(int argc , char *argv[]) {
 
     int port            = -1;
     char path[BUFF_SIZE] = "no path set\0";
-    num_dispatcher      = -1;                               //global variable
-    num_worker          = -1;                               //global variable
-    queue_len           = -1;                               //global variable
- 
+    num_dispatcher      = -1;                               // global variable
+    num_worker          = -1;                               // global variable
+    queue_len           = -1;                               // global variable
+
 
     /* TODO: Intermediate Submission
      *    Description:      Get the input args --> (1) port (2) path (3) num_dispatcher (4) num_workers  (5) queue_length
@@ -448,7 +483,7 @@ int main(int argc , char *argv[]) {
      *    Description:      Open log file
      *    Hint:             Use Global "File* logfile", use "server_log" as the name, what open flags do you want?
      */
-    logfile = fopen("server_log", "w");
+    logfile = fopen(LOG_FILE_NAME, "w");
     if (logfile == NULL) {
         fprintf(stderr, "%s at %d: fopen could not open log file\n", __FILE__, __LINE__);
         exit(EXIT_FAILURE);
@@ -478,6 +513,10 @@ int main(int argc , char *argv[]) {
      */
 
     dispatcher_threads = (pthread_t *) malloc(num_dispatcher * sizeof(pthread_t));
+    if (!dispatcher_threads) {
+        fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
     int dispatcher_thread_ids[num_dispatcher];
     for (int i = 0; i < num_dispatcher; ++i) {
         dispatcher_thread_ids[i] = i;
@@ -490,6 +529,10 @@ int main(int argc , char *argv[]) {
     }
 
     worker_threads = (pthread_t *) malloc(num_worker * sizeof(pthread_t));
+    if (!worker_threads) {
+        fprintf(stderr, "%s at %d: malloc() return NULL\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
     int thread_nums[num_worker];
     for (int j = 0; j < num_worker; ++j) {
         thread_nums[j] = j;
@@ -505,15 +548,15 @@ int main(int argc , char *argv[]) {
     // Wait for each of the threads to complete their work
     // Threads (if created) will not exit (see while loop), but this keeps main from exiting
     int i;
-    for(i = 0; i < num_dispatcher; i++){
-        fprintf(stderr, "JOINING DISPATCHER %d \n",i);
-        if((pthread_join(dispatcher_threads[i], NULL)) != 0) {
+    for (i = 0; i < num_dispatcher; i++) {
+        fprintf(stderr, "JOINING DISPATCHER %d \n", i);
+        if ((pthread_join(dispatcher_threads[i], NULL)) != 0) {
             printf("ERROR : Fail to join dispatcher thread %d.\n", i);
         }
     }
-    for(i = 0; i < num_worker; i++){
+    for (i = 0; i < num_worker; i++) {
     // fprintf(stderr, "JOINING WORKER %d \n",i);
-        if((pthread_join(worker_threads[i], NULL)) != 0) {
+        if ((pthread_join(worker_threads[i], NULL)) != 0) {
             printf("ERROR : Fail to join worker thread %d.\n", i);
         }
     }
