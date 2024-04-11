@@ -131,13 +131,6 @@ int main(int argc, char *argv[]) {
     port = atoi(argv[2]);
     strcpy(output_path, argv[3]);
 
-    // setup connection to the server
-    int fd = setup_connection(port);
-    if (fd == -1) {
-        fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
-        exit(EXIT_FAILURE);
-    }
-
     // initialize the req_entries array, and traverse the directory to send the images to the server
     for (int i = 0; i < sizeof(req_entries) / sizeof(req_entries[0]); i++) {
         req_entries[i].file_name = (char *) malloc(sizeof(char) * BUFF_SIZE);
@@ -148,7 +141,14 @@ int main(int argc, char *argv[]) {
     }
     directory_trav(argv[1]);
 
-     // clean up resources
+    // setup connection to the server and send the images to be processed
+    int fd = setup_connection(port);
+    if (fd == -1) {
+        fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+
+    // clean up resources
     for (int i = 0; i < 100; i++) {
         if (req_entries[i].file_name) {
             free(req_entries[i].file_name);
