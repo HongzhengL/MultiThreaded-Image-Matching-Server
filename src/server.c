@@ -40,6 +40,9 @@ typedef struct {
 
 void queue_init(simple_queue_t *queue, int capacity) {
     queue->requests = (request_t *) malloc(capacity * sizeof(request_t));
+    for (int i = 0; i < capacity; i++) {
+        queue->requests[i].buffer = (char *)malloc(BUFFER_SIZE);
+    }
     queue->head = 0;
     queue->tail = 0;
     queue->size = 0;
@@ -66,7 +69,9 @@ void enqueue(simple_queue_t *queue, request_t request) {
             exit(EXIT_FAILURE);
         }
     }
-    queue->requests[queue->tail] = request;
+    queue->requests[queue->tail].file_size = request.file_size;
+    queue->requests[queue->tail].file_descriptor = request.file_descriptor;
+    memcpy(queue->requests[queue->tail].buffer, request.buffer, request.file_size);
     queue->tail = (queue->tail + 1) % queue->capacity;
     queue->size++;
     if ((error = pthread_cond_signal(&not_empty))) {
@@ -294,6 +299,7 @@ void *dispatch(void *arg)  {
         queue_request.buffer = (char *)malloc(file_size);
         memcpy(queue_request.buffer, request_detail.buffer, file_size);
         enqueue(&req_queue, queue_request);
+        free(queue_request.buffer);
         free(request);
     }
     return NULL;
@@ -359,9 +365,7 @@ void *worker(void *arg) {
         if (close(fd) < 0) {
             fprintf(stderr, "%s at %d: close() failed, errno = %d\n", __FILE__, __LINE__, errno);
         }
-        if (request.buffer) {
-            free(request.buffer);
-        }
+        free(request.buffer);
     }
     return NULL;
 }
