@@ -208,6 +208,7 @@ void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, int fd, cha
     } else {
         fprintf(to_write, "[%d] [%d] [%d] [%s] [%d]\n", threadId, requestNumber, fd, file_name, file_size);
     }
+    fflush(to_write);
 }
 
 /**
@@ -349,7 +350,7 @@ void *worker(void *arg) {
     char *mybuf;                                  // String to hold the contents of the file being requested
 
 
-    // Get the thread id
+    // Get the thread id for logging
     int ID = *((int *) arg);
 
     while (1) {
@@ -380,7 +381,11 @@ void *worker(void *arg) {
 
         // Process the request and send the file to the client
         database_entry_t result = image_match(mybuf, fileSize);
-        send_file_to_client(fd, result.buffer, result.file_size);
+        if (send_file_to_client(fd, result.buffer, result.file_size) == -1) {
+            fprintf(stderr, "%s at %d: Could not send file to client\n", __FILE__, __LINE__);
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
 
         // Clean up and log the request
         free(mybuf);

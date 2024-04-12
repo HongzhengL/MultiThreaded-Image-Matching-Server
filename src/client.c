@@ -53,6 +53,11 @@ void * request_handle(void * args) {
     rewind(file);
 
     int socket = setup_connection(port);
+    if (socket < 0) {
+        fprintf(stderr, "%s at %d: Failed to connect to the server\n", __FILE__, __LINE__);
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
     send_file_to_server(socket, file, file_size);
 
     char *out_path = (char *) malloc(sizeof(char) * 1028);
@@ -62,7 +67,12 @@ void * request_handle(void * args) {
         exit(EXIT_FAILURE);
     }
     sprintf(out_path, "%s/%s", output_path, get_file_name(file_name));
-    receive_file_from_server(socket, out_path);
+    if (receive_file_from_server(socket, out_path) == -1) {
+        fprintf(stderr, "%s at %d: Failed to receive file from server\n", __FILE__, __LINE__);
+        fclose(file);
+        free(out_path);
+        exit(EXIT_FAILURE);
+    }
 
     free(out_path);
     fclose(file);
