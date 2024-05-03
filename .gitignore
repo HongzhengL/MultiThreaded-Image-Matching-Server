@@ -1,0 +1,6 @@
+client
+server
+server_log
+.vscode
+foo*
+output

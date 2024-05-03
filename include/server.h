@@ -31,7 +31,7 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <time.h>
-#include "util.h"
+#include "utils.h"
 #include <stdbool.h>
 #include <unistd.h>
 #include <signal.h>
@@ -60,29 +60,26 @@
 
 /********************* [ Helpful Typedefs        ] ************************/
 
-typedef struct request_queue
-{
+typedef struct request_queue {
     int file_size;
     int file_descriptor;
     char *buffer;
-}request_t; 
+} request_t; 
 
-typedef struct request_detials
-{
-  char buffer[1028];
-  long filelength;
-  char file_name[1028];
-} request_detials_t;
+typedef struct request_details {
+    char buffer[1028];
+    long filelength;
+    char file_name[1028];
+} request_details_t;
 
 typedef struct packet {
-  unsigned int size;
+    unsigned int size;
 } packet_t; 
 
-typedef struct database_entry
-{
-  char *file_name;
-  int file_size;
-  char *buffer;
+typedef struct database_entry {
+    char *file_name;
+    int file_size;
+    char *buffer;
 } database_entry_t;
 
 
@@ -92,7 +89,7 @@ typedef struct database_entry
 void * dispatch(void *arg);
 void * worker(void *args); 
 void loadDatabase(char *path);
-void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, char * file_name, int file_size);
+void LogPrettyPrint(FILE* to_write, int threadId, int requestNumber, int fd, char * file_name, int file_size);
 database_entry_t image_match(char *input_image, int size);
 
 #endif
